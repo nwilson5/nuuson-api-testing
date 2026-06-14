@@ -56,6 +56,29 @@ jobs:
             -H "CF-Access-Client-Secret: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}" \
             https://testing-sandbox-internal.nuuson.dev/v1/testing/hello
 
+  open-promotion-pr:
+    needs: smoke-test-sandbox
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Open sandbox → main PR if none exists
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          existing=$(gh pr list --head sandbox --base main --json number --jq length)
+          if [ "$existing" -eq 0 ]; then
+            gh pr create \
+              --head sandbox \
+              --base main \
+              --title "promote: sandbox → main" \
+              --body "First passing smoke test: \`${{ github.sha }}\`. Check CI status for current state."
+          else
+            echo "Promotion PR already open."
+          fi
+
   deploy-prod:
     needs: build-push
     if: github.ref == 'refs/heads/main'
