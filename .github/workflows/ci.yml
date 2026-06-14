@@ -8,6 +8,8 @@ on:
 jobs:
   validate:
     uses: nwilson5/cicd/.github/workflows/validate.yml@main
+    with:
+      python-version: "3.14"
 
   build-push:
     needs: validate
