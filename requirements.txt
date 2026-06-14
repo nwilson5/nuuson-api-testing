@@ -1,0 +1,5 @@
+fastapi==0.136.3
+uvicorn[standard]==0.30.0
+httpx==0.28.1
+nwut @ git+https://github.com/nwilson5/nwut.git@v0.1.0
+# Run `uv pip compile requirements.in -o requirements.txt` to lock transitive deps.

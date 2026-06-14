@@ -1,0 +1,66 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [main, sandbox]
+  pull_request:
+
+jobs:
+  validate:
+    uses: nwilson5/cicd/.github/workflows/validate.yml@main
+
+  build-push:
+    needs: validate
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/sandbox'
+    uses: nwilson5/cicd/.github/workflows/docker-build.yml@main
+    with:
+      image: ghcr.io/nwilson5/nuuson-api-testing
+
+  deploy-sandbox:
+    needs: build-push
+    if: github.ref == 'refs/heads/sandbox'
+    uses: nwilson5/cicd/.github/workflows/deploy-vps.yml@main
+    with:
+      project: nuuson-api-testing-sandbox
+      image-tag: ${{ needs.build-push.outputs.image-tag }}
+      vault_addr: ${{ vars.VAULT_ADDR }}
+      vault_role: project-nuuson-api-testing-sandbox
+      shared_vault_paths: "secret/shared/gemini"
+    secrets:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+
+  smoke-test-sandbox:
+    needs: deploy-sandbox
+    runs-on: ubuntu-latest
+    steps:
+      - name: Health check
+        run: |
+          curl -sf --retry 5 --retry-delay 5 \
+            -H "CF-Access-Client-Id: ${{ secrets.CF_ACCESS_CLIENT_ID }}" \
+            -H "CF-Access-Client-Secret: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}" \
+            https://testing-sandbox-internal.nuuson.dev/health
+
+      - name: Endpoint check
+        run: |
+          curl -sf --retry 3 --retry-delay 3 \
+            -H "CF-Access-Client-Id: ${{ secrets.CF_ACCESS_CLIENT_ID }}" \
+            -H "CF-Access-Client-Secret: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}" \
+            https://testing-sandbox-internal.nuuson.dev/v1/testing/hello
+
+  deploy-prod:
+    needs: build-push
+    if: github.ref == 'refs/heads/main'
+    uses: nwilson5/cicd/.github/workflows/deploy-vps.yml@main
+    with:
+      project: nuuson-api-testing
+      image-tag: ${{ needs.build-push.outputs.image-tag }}
+      vault_addr: ${{ vars.VAULT_ADDR }}
+      vault_role: project-nuuson-api-testing
+      shared_vault_paths: "secret/shared/gemini"
+    secrets:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+
+  # Phase 7: open PR to nuuson-api-gateway after prod deploy.
+  # Requires secret/shared/github GH_PAT in Vault — not yet configured.

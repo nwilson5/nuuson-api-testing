@@ -1,0 +1,21 @@
+services:
+  api:
+    build: .
+    image: nuuson-api-testing:local
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./app:/app/app
+    networks:
+      - default
+    labels: {}
+    env_file:
+      - path: .env
+        required: false
+      - path: .env.local
+        required: false
+
+networks:
+  traefik-public:
+    external: false
+    name: default
