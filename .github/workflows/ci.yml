@@ -12,6 +12,9 @@ jobs:
   build-push:
     needs: validate
     if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/sandbox'
+    permissions:
+      contents: read
+      packages: write
     uses: nwilson5/cicd/.github/workflows/docker-build.yml@main
     with:
       image: ghcr.io/nwilson5/nuuson-api-testing
