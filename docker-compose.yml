@@ -1,6 +1,6 @@
 services:
   api:
-    image: ghcr.io/nwilson5/nuuson-api-testing:${IMAGE_TAG}
+    image: ${IMAGE_TAG}
     restart: unless-stopped
     networks:
       - traefik-public
