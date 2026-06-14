@@ -8,10 +8,15 @@ on:
 jobs:
   validate:
     uses: nwilson5/cicd/.github/workflows/validate.yml@main
+    with:
+      python-version: "3.14"
 
   build-push:
     needs: validate
     if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/sandbox'
+    permissions:
+      contents: read
+      packages: write
     uses: nwilson5/cicd/.github/workflows/docker-build.yml@main
     with:
       image: ghcr.io/nwilson5/nuuson-api-testing
@@ -19,6 +24,9 @@ jobs:
   deploy-sandbox:
     needs: build-push
     if: github.ref == 'refs/heads/sandbox'
+    permissions:
+      id-token: write
+      contents: read
     uses: nwilson5/cicd/.github/workflows/deploy-vps.yml@main
     with:
       project: nuuson-api-testing-sandbox
@@ -36,21 +44,55 @@ jobs:
     steps:
       - name: Health check
         run: |
-          curl -sf --retry 5 --retry-delay 5 \
+          curl -sL --retry 5 --retry-delay 5 \
             -H "CF-Access-Client-Id: ${{ secrets.CF_ACCESS_CLIENT_ID }}" \
             -H "CF-Access-Client-Secret: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}" \
-            https://testing-sandbox-internal.nuuson.dev/health
+            -w "\nHTTP %{http_code}\n" \
+            https://testing-sandbox-internal.nuuson.dev/health \
+            | tee /tmp/health-response
+          status=$(tail -1 /tmp/health-response | grep -oP '\d+')
+          [ "$status" -ge 200 ] && [ "$status" -lt 300 ]
 
       - name: Endpoint check
         run: |
-          curl -sf --retry 3 --retry-delay 3 \
+          curl -sL --retry 3 --retry-delay 3 \
             -H "CF-Access-Client-Id: ${{ secrets.CF_ACCESS_CLIENT_ID }}" \
             -H "CF-Access-Client-Secret: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}" \
-            https://testing-sandbox-internal.nuuson.dev/v1/testing/hello
+            -w "\nHTTP %{http_code}\n" \
+            https://testing-sandbox-internal.nuuson.dev/v1/testing/hello \
+            | tee /tmp/endpoint-response
+          status=$(tail -1 /tmp/endpoint-response | grep -oP '\d+')
+          [ "$status" -ge 200 ] && [ "$status" -lt 300 ]
+
+  open-promotion-pr:
+    needs: smoke-test-sandbox
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Open sandbox → main PR if none exists
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          existing=$(gh pr list --head sandbox --base main --json number --jq length)
+          if [ "$existing" -eq 0 ]; then
+            gh pr create \
+              --head sandbox \
+              --base main \
+              --title "promote: sandbox → main" \
+              --body "First passing smoke test: \`${{ github.sha }}\`. Check CI status for current state."
+          else
+            echo "Promotion PR already open."
+          fi
 
   deploy-prod:
     needs: build-push
     if: github.ref == 'refs/heads/main'
+    permissions:
+      id-token: write
+      contents: read
     uses: nwilson5/cicd/.github/workflows/deploy-vps.yml@main
     with:
       project: nuuson-api-testing
