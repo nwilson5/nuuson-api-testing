@@ -34,16 +34,11 @@ PRs from `sandbox` must pass CI before they can be merged. Set `CI/CD / smoke-te
 
 ## One-time setup for a new service repo using this pattern
 
-### 1. VPS project directories
+### 1. docker-compose.yml
 
-Two directories are needed on the VPS (one per environment):
+Commit a `docker-compose.yml` to the repo root. CI copies it to `~/projects/<project>/` on the VPS automatically and writes `.env` from Vault — no manual VPS setup needed.
 
-```
-/opt/nuuson-api-testing/           # prod
-/opt/nuuson-api-testing-sandbox/   # sandbox
-```
-
-Each needs a `docker-compose.yml` and `.env` with `IMAGE_TAG`, `TRAEFIK_ROUTER`, `TRAEFIK_HOST`, and any app secrets.
+The `.env` is populated from `secret/projects/<project>/env` in Vault. At minimum it needs `TRAEFIK_ROUTER` and `TRAEFIK_HOST` (Traefik routing labels). Add any app-specific secrets there too. Shared secrets (e.g. `secret/shared/gemini`) are appended via `shared_vault_paths` in the CI workflow.
 
 ### 2. Cloudflare Access
 
